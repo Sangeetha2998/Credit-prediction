@@ -1,0 +1,331 @@
+import numpy as np
+import pandas as pd
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+sns.set()
+
+from sklearn.linear_model import LogisticRegression , SGDClassifier
+from sklearn.svm import SVC
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import AdaBoostClassifier , BaggingClassifier , GradientBoostingClassifier , RandomForestClassifier , VotingClassifier
+from sklearn.multiclass import OneVsOneClassifier
+import xgboost as xgb
+%matplotlib inline
+plt.rcParams["figure.figsize"] = (12, 6)
+sns.set_style("whitegrid")
+import warnings
+
+warnings.filterwarnings("ignore")
+warnings.warn("this will not show")
+pd.set_option('display.float_format', lambda x: '%.3f' % x)
+# Step 2: Upload the Kaggle API token to Colab
+
+# Step 3: Set up the Kaggle API
+!mkdir -p ~/.kaggle
+!cp kaggle.json ~/.kaggle/
+!chmod 600 ~/.kaggle/kaggle.json
+
+# Step 4: Download the dataset
+!kaggle datasets download -d parisrohan/credit-score-classification
+
+# Step 5: Extract the dataset
+!unzip -o credit-score-classification.zip
+# Assuming the CSV file is named 'train.csv'
+train = pd.read_csv('train.csv')  # replace 'train.csv' with the actual file name
+test = pd.read_csv('test.csv')
+
+
+
+print(train.head())
+train.info()
+train.columns.values
+
+print('..............................................................')
+
+#TO CHECK IF THERE ARE ANY DUPLICATE VALUES
+def duplicate_values(df):
+    print("Duplicate check...")
+    num_duplicates = df.duplicated(subset=None, keep='first').sum()
+    if num_duplicates > 0:
+        print("There are", num_duplicates, "duplicated observations in the dataset.")
+        df.drop_duplicates(keep='first', inplace=True)
+        print(num_duplicates, "duplicates were dropped!")
+        print("No more duplicate rows!")
+    else:
+        print("THERE ARE NO DUPLICATES IN THE OBSERVATION OF DATASET.")
+
+duplicate_values(train)
+train.columns.values
+
+
+#WE CAN DROP UNWANTED DATA COLUMNS
+cols= ['Age',
+       'Annual_Income', 'Monthly_Inhand_Salary', 'Interest_Rate', 'Num_of_Loan',
+       'Delay_from_due_date', 'Num_of_Delayed_Payment',
+       'Num_Credit_Inquiries', 'Credit_Mix',
+       'Outstanding_Debt', 'Credit_Utilization_Ratio',
+       'Credit_History_Age', 'Payment_of_Min_Amount',
+       'Total_EMI_per_month', 'Amount_invested_monthly',
+       'Payment_Behaviour', 'Monthly_Balance', 'Credit_Score','Num_Credit_Card']
+data = train[cols]
+
+#WE WILL DROP MONTH INHAND SALARY AS IT IS RELATED TO ANNULAL INCOME
+data = data.drop(['Monthly_Inhand_Salary'], axis = 1)
+print('NO OF NULL IN EACH COLUMN')
+data.isnull().sum()
+print('.........................')
+
+
+data['Monthly_Balance'] = data['Monthly_Balance'].astype(str)
+data['Monthly_Balance'] = data['Monthly_Balance'].str[:10]
+
+#ANNUAL INCOME HAS MANY '_'
+
+data = data.replace('_', ' ', regex=True)
+data.replace('nan', pd.NA, inplace=True)
+data = data.fillna(0)
+mask = data.apply(lambda row: row.astype(str).str.contains('!@9#%8')).any(axis=1)
+# Drop rows containing the specific string
+df_train = data[~mask]
+
+# TO FIND YEARS OF CREDIT
+
+df_train['Credit_History_Age'] = df_train['Credit_History_Age'].astype(str)
+df_train['History_Year'] = df_train['Credit_History_Age'].str[ :2]
+df_train['History_Year'] = pd.to_numeric(df_train['History_Year'], errors='coerce')
+df_train['History_Year'] = df_train['History_Year'].fillna(df_train['History_Year'].median())
+df_train['Credit_History_Age'] = df_train['History_Year']
+
+
+
+df_train['Num_of_Delayed_Payment'] = pd.to_numeric(df_train['Num_of_Delayed_Payment'])
+
+df_train['Outstanding_Debt'] = pd.to_numeric(df_train['Outstanding_Debt'])
+# We will use the to_numeric() function to convert the values from strng to integer.
+
+df_train['Amount_invested_monthly'] = pd.to_numeric(df_train['Amount_invested_monthly'])
+
+df_train['Monthly_Balance'] = pd.to_numeric(df_train['Monthly_Balance'])
+df_train['Annual_Income'] = pd.to_numeric(df_train['Annual_Income'])
+
+df_train['Age'] = pd.to_numeric(df_train['Age'])
+df_train['Num_of_Loan'] = pd.to_numeric(df_train['Num_of_Loan'])
+df_train['Num_Credit_Inquiries'] = pd.to_numeric(df_train['Num_Credit_Inquiries'])
+df_train['Num_Credit_Card'] = pd.to_numeric(df_train['Num_Credit_Card'])
+
+print('############################################################################')
+df_train.isnull().sum()
+df_train.info()
+#&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+#lets clean test
+duplicate_values(test)
+
+test.columns.values
+
+
+#WE CAN DROP UNWANTED df_train COLUMNS
+colu= ['Age',
+       'Annual_Income', 'Monthly_Inhand_Salary', 'Interest_Rate', 'Num_of_Loan',
+       'Delay_from_due_date', 'Num_of_Delayed_Payment',
+       'Num_Credit_Inquiries', 'Credit_Mix',
+       'Outstanding_Debt', 'Credit_Utilization_Ratio',
+       'Credit_History_Age', 'Payment_of_Min_Amount',
+       'Total_EMI_per_month', 'Amount_invested_monthly',
+       'Payment_Behaviour', 'Monthly_Balance', 'Num_Credit_Card']
+dat = test[colu]
+
+#WE WILL DROP MONTH INHAND SALARY AS IT IS RELATED TO ANNULAL INCOME
+dat = dat.drop(['Monthly_Inhand_Salary'], axis = 1)
+print('NO OF NULL IN EACH COLUMN')
+dat.isnull().sum()
+
+
+dat['Monthly_Balance'] = dat['Monthly_Balance'].astype(str)
+dat['Monthly_Balance'] = dat['Monthly_Balance'].str[:10]
+
+#ANNUAL INCOME HAS MANY '_'
+
+dat = dat.replace('_', ' ', regex=True)
+dat.replace('nan', pd.NA, inplace=True)
+dat = dat.fillna(0)
+mask = dat.apply(lambda row: row.astype(str).str.contains('!@9#%8')).any(axis=1)
+
+# Drop rows containing the specific string
+df_test = dat[~mask]
+
+# TO FIND YEARS OF CREDIT
+df_test['Credit_History_Age'] = df_test['Credit_History_Age'].astype(str)
+df_test['History_Year'] = df_test['Credit_History_Age'].str[ :2]
+df_test['History_Year'] = pd.to_numeric(df_test['History_Year'], errors='coerce')
+df_test['History_Year'] = df_test['History_Year'].fillna(df_test['History_Year'].median())
+df_test['Credit_History_Age'] = df_test['History_Year']
+
+df_test['Num_of_Delayed_Payment'] = pd.to_numeric(df_test['Num_of_Delayed_Payment'])
+
+df_test['Outstanding_Debt'] = pd.to_numeric(df_test['Outstanding_Debt'])
+# We will use the to_numeric() function to convert the values from strng to integer.
+
+df_test['Amount_invested_monthly'] = pd.to_numeric(df_test['Amount_invested_monthly'])
+
+df_test['Monthly_Balance'] = pd.to_numeric(df_test['Monthly_Balance'])
+df_test['Annual_Income'] = pd.to_numeric(df_test['Annual_Income'])
+
+df_test['Age'] = pd.to_numeric(df_test['Age'])
+df_test['Num_of_Loan'] = pd.to_numeric(df_test['Num_of_Loan'])
+df_test['Num_Credit_Inquiries'] = pd.to_numeric(df_test['Num_Credit_Inquiries'])
+df_test['Num_Credit_Card'] = pd.to_numeric(df_test['Num_Credit_Card'])
+
+print('############################################################################')
+df_test.isnull().sum()
+df_test.info()
+df_train['Payment_of_Min_Amount']= df_train['Payment_of_Min_Amount'].apply(lambda x : 'No' if x == 'NM' else x)
+df_test['Payment_of_Min_Amount']= df_test['Payment_of_Min_Amount'].apply(lambda x : 'No' if x == 'NM' else x)
+pd.DataFrame(df_train.groupby('Credit_Mix')['Credit_Score'].value_counts())
+df_train['Credit_Mix']= df_train['Credit_Mix'].apply(lambda x : 'Standard' if x == ' ' else x)
+df_test['Credit_Mix']= df_test['Credit_Mix'].apply(lambda x : 'Standard' if x == ' ' else x)
+
+print('############################################################################')
+df_test.isnull().sum()
+df_test.info()
+
+def grab_col_names(dataframe, cat_th=10, car_th=30):
+  cat_cols = [col for col in dataframe.columns if dataframe[col].dtype == "O"]
+  num_but_cat = [col for col in dataframe.columns if
+                   dataframe[col].nunique() < cat_th and dataframe[col].dtype != "O"]
+  cat_but_car = [col for col in dataframe.columns if
+                   dataframe[col].nunique() > car_th and dataframe[col].dtype == "O"]
+  cat_cols += num_but_cat
+  cat_cols = [col for col in cat_cols if col not in cat_but_car]
+
+  num_cols = [col for col in dataframe.columns if dataframe[col].dtype != "O"]
+  num_cols = [col for col in num_cols if col not in num_but_cat]
+
+  print(f"Observations: {dataframe.shape[0]}")
+  print(f"Variables: {dataframe.shape[1]}")
+  print(f'cat_cols: {len(cat_cols)}')
+  print(f'num_cols: {len(num_cols)}')
+  print(f'cat_but_car: {len(cat_but_car)}')
+  print(f'num_but_cat: {len(num_but_cat)}')
+  return cat_cols, num_cols, cat_but_car
+
+cat_cols, num_cols, cat_but_car = grab_col_names(df_test)
+
+print(f"Cat_Cols : {cat_cols}")
+print("#############")
+print(f"Num_Cols : {num_cols}")
+print("#############")
+print(f"Cat_But_Car : {cat_but_car}")
+
+#PLOT NUMERIC COLUMNS
+df_num = df_train[[col for col in num_cols if col in df_train.columns]]
+df_num.hist(figsize=(16, 20), bins=50, xlabelsize=8, ylabelsize=8, color="green");
+
+f, ax = plt.subplots(figsize=[18, 13])
+sns.heatmap(df_train[num_cols].corr(), annot=True, fmt=".3f", ax=ax, cmap="magma")
+ax.set_title("Correlation Matrix", fontsize=20)
+plt.show();
+
+def target_summary_with_cat(dataframe, target, categorical_col, plot= False):
+    print(categorical_col)
+    print(pd.DataFrame({"Count": dataframe[categorical_col].value_counts(),
+                        "Ratio": 100 * dataframe[categorical_col].value_counts() / len(dataframe)}), )
+    if plot:
+        plt.rcParams['figure.figsize']=[6,8]
+        sns.countplot(x=dataframe[categorical_col], data=dataframe)
+        plt.xticks(rotation=60,ha='right')
+        plt.show()
+
+for col in cat_cols:
+    target_summary_with_cat(df_train, "Credit_Score", col, plot=True)
+
+sns.countplot(data = df_train , y = 'Payment_Behaviour' , hue ='Credit_Score' , palette='Set1')
+plt.title("countplot of Payment Behaviour with credit score" , c = "r")
+plt.ylabel('Payment Behaviour' , c ="r")
+plt.show()
+
+sns.catplot(y='Outstanding_Debt', x='Credit_Score', data=df_train, kind='box', height=5, aspect=1.4,palette='rocket' , hue ='Credit_Score')
+plt.title('Boxplot of Outstanding Debt at different Credit_Score Categories', fontsize=14, c='k')
+plt.xlabel('Credit Score', fontsize=14, c='k')
+plt.ylabel('Outstanding Debt', fontsize=14, c='k')
+plt.show()
+
+sns.relplot(x='Credit_Utilization_Ratio', y='Num_Credit_Card', data=df_train, kind='scatter',
+            col='Credit_Score', col_wrap=3 , color ='g')
+plt.show()
+
+sns.set_palette("pastel")
+Amount_invested_monthly = pd.cut(x = df_train['Amount_invested_monthly'],
+      bins=[0 , 3000 , 6000 , 9000 , np.inf],
+      labels=['0-3k','3k-6k','6k-9k','>9k'])
+amount_invested_value = Amount_invested_monthly.value_counts()
+ax = sns.countplot(x = Amount_invested_monthly , order = amount_invested_value.index)
+plt.show()
+
+#LETS BUILD THE MODEL NOW
+#split train and test
+
+from sklearn.model_selection import train_test_split
+X = df_train.drop(['Credit_Score'], axis=1)
+y = df_train['Credit_Score']
+
+seed = 80
+X_train, X_test, y_train, y_test = train_test_split(X,
+                                                    y,
+                                                    stratify=y,
+                                                    shuffle=True,
+                                                    test_size=0.2,
+                                                    random_state=seed)
+print("X_train shape :", X_train.shape)
+print("y_train shape :", y_train.shape)
+print("X_test shape :", X_test.shape)
+print("y_test shape :", y_test.shape)
+
+#LABEL ENCODING BY ORDINAL
+
+order = [
+    'Low_spent_Small_value_payments',
+    'Low_spent_Medium_value_payments',
+    'Low_spent_Large_value_payments',
+    'High_spent_Small_value_payments',
+    'High_spent_Medium_value_payments',
+    'High_spent_Large_value_payments'
+]
+from sklearn.preprocessing import OrdinalEncoder
+# Replace spaces with underscores in 'Payment_Behaviour' column for consistency
+X_train['Payment_Behaviour'] = X_train['Payment_Behaviour'].str.replace(' ', '_')
+X_test['Payment_Behaviour'] = X_test['Payment_Behaviour'].str.replace(' ', '_')
+
+ordinal_encoder = OrdinalEncoder(categories=[order])
+
+X_train['Payment_Behaviour_Encoded'] = ordinal_encoder.fit_transform(X_train[['Payment_Behaviour']])
+X_test['Payment_Behaviour_Encoded'] = ordinal_encoder.transform(X_test[['Payment_Behaviour']])
+
+# Drop original column
+X_train.drop(['Payment_Behaviour'], axis=1, inplace= True)
+X_test.drop(['Payment_Behaviour'], axis=1, inplace= True)
+
+
+from sklearn.preprocessing import OneHotEncoder
+# Create OneHotEncoder object
+onehot_encoder = OneHotEncoder(handle_unknown="ignore", sparse=False).set_output(transform="pandas")
+
+# Fit and transform the training set
+encoded_features = onehot_encoder.fit_transform(X_train[['Payment_of_Min_Amount', 'Credit_Mix']])
+encoded_features_test = onehot_encoder.transform(X_test[['Payment_of_Min_Amount', 'Credit_Mix']])
+
+encoded_features
+
+#CONCAT ENCODED VALUES
+X_train= pd.concat([X_train, encoded_features], axis=1).drop(columns= ['Payment_of_Min_Amount', 'Credit_Mix'])
+X_test= pd.concat([X_test, encoded_features_test], axis=1).drop(columns= ['Payment_of_Min_Amount', 'Credit_Mix'])
+X_train.head()
+X_test.head()
+X_train.columns
+
+#corr plot
+plt.figure(figsize=(25, 15))
+
+sns.heatmap(X_train.corr(), annot = True, fmt='.2f', cmap= 'coolwarm')
+plt.show()
